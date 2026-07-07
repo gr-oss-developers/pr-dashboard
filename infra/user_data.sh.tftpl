@@ -22,11 +22,11 @@ WorkingDirectory=/opt/pr-dashboard/app
 ExecStart=/usr/bin/node server.js
 Restart=always
 User=prdash
-Environment=PORT=80
-Environment=GITHUB_CLIENT_ID=${client_id}
-Environment=GITHUB_CLIENT_SECRET=${client_secret}
-Environment=OAUTH_SCOPES=${scopes}
-Environment=OAUTH_REDIRECT_URI=${redirect_uri}
+Environment="PORT=80"
+Environment="GITHUB_CLIENT_ID=${client_id}"
+Environment="GITHUB_CLIENT_SECRET=${client_secret}"
+Environment="OAUTH_SCOPES=${scopes}"
+Environment="OAUTH_REDIRECT_URI=${redirect_uri}"
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 [Install]
