@@ -72,27 +72,11 @@ resource "aws_security_group" "app" {
   tags = { Name = "pr-dashboard" }
 }
 
-# A stable public address so the DNS record / OAuth callback survive instance stop/start.
+# A stable public address. DNS is managed externally (Namecheap): point <domain_name>
+# at this Elastic IP with an A record — see the dns_record_to_create output.
 resource "aws_eip" "app" {
   domain = "vpc"
   tags   = { Name = "pr-dashboard" }
-}
-
-# DNS: point <domain_name> at the Elastic IP. Enabled when domain_name is set and the
-# hosted zone (route53_zone_name) already exists in this account's Route 53.
-data "aws_route53_zone" "app" {
-  count        = var.domain_name != "" ? 1 : 0
-  name         = var.route53_zone_name
-  private_zone = false
-}
-
-resource "aws_route53_record" "app" {
-  count   = var.domain_name != "" ? 1 : 0
-  zone_id = data.aws_route53_zone.app[0].zone_id
-  name    = var.domain_name
-  type    = "A"
-  ttl     = 300
-  records = [aws_eip.app.public_ip]
 }
 
 resource "aws_instance" "app" {

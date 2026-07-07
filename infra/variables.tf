@@ -29,19 +29,13 @@ variable "ssh_cidr" {
 }
 
 # --- DNS -------------------------------------------------------------------
-# Serves the dashboard on a hostname in the gr-oss.io hosted zone (must already exist in
-# this account's Route 53). Set domain_name to the apex ("gr-oss.io") to serve there, or
-# clear both to fall back to the raw Elastic IP.
+# The app is served on this hostname and it's used for the OAuth callback. DNS is managed
+# externally (Namecheap): after apply, create an A record pointing this name at the
+# Elastic IP (see the dns_record_to_create output). Clear it to use the raw IP instead.
 variable "domain_name" {
   type        = string
-  description = "FQDN to serve the dashboard on."
+  description = "FQDN the dashboard is served on (A record created manually at the DNS provider)."
   default     = "pr-dashboard.gr-oss.io"
-}
-
-variable "route53_zone_name" {
-  type        = string
-  description = "Existing Route 53 hosted zone that domain_name belongs to."
-  default     = "gr-oss.io"
 }
 
 # --- App source ------------------------------------------------------------

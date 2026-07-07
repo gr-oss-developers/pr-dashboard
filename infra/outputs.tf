@@ -9,8 +9,13 @@ output "oauth_callback_url" {
 }
 
 output "public_ip" {
-  description = "Elastic IP of the instance (point DNS here / register with the OAuth App)."
+  description = "Elastic IP of the instance."
   value       = aws_eip.app.public_ip
+}
+
+output "dns_record_to_create" {
+  description = "Add this A record at the DNS provider (Namecheap) so the hostname resolves."
+  value       = var.domain_name != "" ? "A  ${var.domain_name}  ->  ${aws_eip.app.public_ip}" : "n/a (using raw IP)"
 }
 
 output "ssh" {

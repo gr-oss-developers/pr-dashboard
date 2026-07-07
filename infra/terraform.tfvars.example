@@ -9,8 +9,8 @@ region   = "eu-west-1"
 key_name = ""          # your EC2 key pair name for SSH (optional)
 ssh_cidr = "0.0.0.0/0" # tighten to YOUR_IP/32
 
-# DNS: served on this hostname (hosted zone must exist in Route 53). Clear both for raw IP.
-domain_name       = "pr-dashboard.gr-oss.io"
-route53_zone_name = "gr-oss.io"
+# DNS managed externally (Namecheap): after apply, point this name at the Elastic IP
+# (see the dns_record_to_create output). Clear it to use the raw IP.
+domain_name = "pr-dashboard.gr-oss.io"
 
 author = "Ivan Pavlovic"
