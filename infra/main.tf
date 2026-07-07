@@ -39,7 +39,7 @@ locals {
 
 resource "aws_security_group" "app" {
   name_prefix = "pr-dashboard-"
-  description = "PR Dashboard — HTTP/HTTPS from anywhere, SSH from admin"
+  description = "PR Dashboard - HTTP/HTTPS from anywhere, SSH from admin"
 
   ingress {
     description = "HTTP"
