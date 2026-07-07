@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Bootstraps the PR Dashboard on first boot: install runtime, fetch the app, run it as a
+# systemd service on port 80. (No `set -x` — the OAuth secret must not land in the log.)
+set -euo pipefail
+
+dnf install -y nodejs git
+
+id -u prdash >/dev/null 2>&1 || useradd --system --create-home --home-dir /opt/pr-dashboard --shell /usr/sbin/nologin prdash
+rm -rf /opt/pr-dashboard/app
+git clone --depth 1 --branch ${repo_branch} ${repo_url} /opt/pr-dashboard/app
+chown -R prdash:prdash /opt/pr-dashboard
+
+# Quoted heredoc: values are already substituted by Terraform; bash writes them verbatim.
+cat >/etc/systemd/system/pr-dashboard.service <<'UNIT'
+[Unit]
+Description=PR Dashboard
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/pr-dashboard/app
+ExecStart=/usr/bin/node server.js
+Restart=always
+User=prdash
+Environment=PORT=80
+Environment=GITHUB_CLIENT_ID=${client_id}
+Environment=GITHUB_CLIENT_SECRET=${client_secret}
+Environment=OAUTH_SCOPES=${scopes}
+Environment=OAUTH_REDIRECT_URI=${redirect_uri}
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now pr-dashboard

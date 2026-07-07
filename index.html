@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PR Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #2f81f7;
+    --draft: #8b949e;
+    --needs: #d29922;
+    --reviewed: #3fb950;
+    --merged: #a371f7;
+    --closed: #f85149;
+    --shadow: 0 1px 3px rgba(1,4,9,.6);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topline { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 8px; }
+  h1 svg { fill: var(--accent); }
+  .spacer { flex: 1; }
+  .status { color: var(--muted); font-size: 12px; }
+  .status.error { color: var(--closed); font-weight: 600; }
+
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .controls + .controls { margin-top: 8px; }
+  .field { display: flex; align-items: center; gap: 6px; }
+  label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  input[type=text] {
+    font: inherit; padding: 5px 8px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+  }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(47,129,247,.4); }
+  button {
+    font: inherit; font-weight: 600; padding: 5px 12px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface2); color: var(--text); cursor: pointer;
+  }
+  button:hover { background: #30363d; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #1f6feb; }
+  button:disabled { opacity: .5; cursor: default; }
+
+  .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--accent);
+    border-radius: 999px; padding: 3px 6px 3px 10px; font-size: 12px; font-weight: 600;
+  }
+  .chip.me {
+    background: color-mix(in srgb, var(--reviewed) 15%, transparent);
+    border-color: color-mix(in srgb, var(--reviewed) 45%, transparent);
+    color: var(--reviewed);
+  }
+  .chip button {
+    all: unset; cursor: pointer; line-height: 1; font-size: 14px;
+    color: inherit; opacity: .6; padding: 0 2px;
+  }
+  .chip button:hover { opacity: 1; }
+
+  /* org toggle pills */
+  .org {
+    cursor: pointer; user-select: none;
+    border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+    border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .org .tick { font-size: 10px; opacity: 0; }
+  .org.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+  .org.on .tick { opacity: 1; }
+  .org.off { opacity: .55; text-decoration: line-through; }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(240px, 1fr));
+    gap: 12px; padding: 16px 20px 40px; align-items: start; overflow-x: auto;
+  }
+  .column { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; min-height: 80px; }
+  .col-head {
+    padding: 10px 12px; display: flex; align-items: center; gap: 8px;
+    font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--border);
+  }
+  .col-head .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .col-head .win { font-weight: 400; font-size: 11px; color: var(--muted); }
+  .col-head .count { margin-left: auto; background: var(--surface2); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted); }
+  .col-draft .dot { background: var(--draft); }
+  .col-needs .dot { background: var(--needs); }
+  .col-reviewed .dot { background: var(--reviewed); }
+  .col-merged .dot { background: var(--merged); }
+  .col-closed .dot { background: var(--closed); }
+  .col-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: calc(100vh - 230px); }
+  .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 16px 8px; font-style: italic; }
+
+  /* themed scrollbars (follow the active theme) */
+  .col-body, .board, .dd-menu { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+  .col-body::-webkit-scrollbar, .board::-webkit-scrollbar, .dd-menu::-webkit-scrollbar { width: 10px; height: 10px; }
+  .col-body::-webkit-scrollbar-track, .board::-webkit-scrollbar-track, .dd-menu::-webkit-scrollbar-track { background: transparent; }
+  .col-body::-webkit-scrollbar-thumb, .board::-webkit-scrollbar-thumb, .dd-menu::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted) 45%, transparent);
+    border: 2px solid transparent; border-radius: 999px; background-clip: padding-box;
+  }
+  .col-body::-webkit-scrollbar-thumb:hover, .board::-webkit-scrollbar-thumb:hover, .dd-menu::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--accent) 75%, transparent); background-clip: padding-box;
+  }
+  .col-body::-webkit-scrollbar-corner, .board::-webkit-scrollbar-corner { background: transparent; }
+
+  .card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: inherit;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card .repo { font-size: 11px; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .card .title:hover { color: var(--accent); }
+  .card .meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .card .meta .num { color: var(--accent); font-weight: 600; }
+  .avatar { width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; }
+  .author { display: inline-flex; align-items: center; gap: 4px; }
+  .diff .add { color: var(--reviewed); font-weight: 600; }
+  .diff .del { color: var(--closed); font-weight: 600; }
+  .labels { display: flex; gap: 4px; flex-wrap: wrap; }
+  .lbl { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(255,255,255,.15); font-weight: 600; }
+  .badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; }
+  .badge.approved { background: color-mix(in srgb, var(--reviewed) 20%, transparent); color: var(--reviewed); }
+  .badge.changes { background: color-mix(in srgb, var(--closed) 20%, transparent); color: var(--closed); }
+  .badge.commented { background: color-mix(in srgb, var(--needs) 22%, transparent); color: var(--needs); }
+
+  /* custom theme dropdown */
+  .dropdown { position: relative; }
+  .dd-btn {
+    font: inherit; font-weight: 600; padding: 5px 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface2); color: var(--text); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .dd-btn:hover { border-color: var(--accent); }
+  .dd-caret { fill: var(--muted); transition: transform .15s ease; }
+  .dropdown.open .dd-caret { transform: rotate(180deg); }
+  .dd-menu {
+    position: absolute; top: calc(100% + 6px); right: 0;
+    min-width: 230px; max-height: 65vh; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.4);
+    padding: 6px; z-index: 50; display: none;
+  }
+  .dropdown.open .dd-menu { display: block; }
+  .dd-item {
+    width: 100%; text-align: left; border: none; background: transparent;
+    color: var(--text); font: inherit; padding: 7px 8px; border-radius: 6px;
+    display: flex; align-items: center; gap: 10px; cursor: pointer; outline: none;
+  }
+  .dd-item:hover, .dd-item:focus { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .dd-name { flex: 1; white-space: nowrap; }
+  .dd-check { color: var(--accent); font-weight: 700; opacity: 0; }
+  .dd-item.sel .dd-check { opacity: 1; }
+  .sw { display: inline-flex; gap: 3px; flex: none; }
+  .sw i { width: 9px; height: 9px; border-radius: 50%; display: block; border: 1px solid rgba(127,127,127,.35); }
+  .hidden { display: none !important; }
+
+  /* signed-in user widget in the header */
+  .auth { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+  .auth .avatar { width: 22px; height: 22px; }
+  .auth .who { font-weight: 600; color: var(--text); }
+  .auth .logout {
+    font-size: 12px; font-weight: 600; text-decoration: none;
+    color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px;
+  }
+  .auth .logout:hover { color: var(--text); border-color: var(--accent); }
+
+  /* sign-in overlay */
+  .overlay {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+  }
+  .login-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    padding: 36px 40px; text-align: center; max-width: 360px;
+  }
+  .login-card .logo { fill: var(--accent); margin-bottom: 6px; }
+  .login-card h2 { margin: 6px 0 4px; font-size: 20px; }
+  .login-card p { color: var(--muted); font-size: 14px; margin: 0 0 22px; }
+  .gh-btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--accent); color: #fff; text-decoration: none;
+    font-weight: 700; font-size: 14px; padding: 10px 18px; border-radius: 8px;
+  }
+  .gh-btn:hover { filter: brightness(1.08); }
+  .gh-btn svg { fill: currentColor; }
+</style>
+</head>
+<body>
+<div id="loginOverlay" class="overlay hidden">
+  <div class="login-card">
+    <svg class="logo" height="34" width="34" viewBox="0 0 16 16"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"></path></svg>
+    <h2>PR Dashboard</h2>
+    <p>Sign in with your GitHub account to see your pull requests.</p>
+    <a class="gh-btn" href="/login">
+      <svg height="18" width="18" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>
+      Sign in with GitHub
+    </a>
+  </div>
+</div>
+<header>
+  <div class="topline">
+    <h1>
+      <svg height="22" width="22" viewBox="0 0 16 16"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"></path></svg>
+      PR Dashboard
+    </h1>
+    <div class="spacer"></div>
+    <span id="auth" class="auth"></span>
+    <span id="status" class="status"></span>
+    <button id="sound" title="Hover sound on/off"></button>
+    <div class="dropdown" id="themeDD">
+      <button class="dd-btn" id="themeBtn" title="Theme" aria-haspopup="listbox" aria-expanded="false">
+        <span id="themeLabel">Theme</span>
+        <svg class="dd-caret" viewBox="0 0 16 16" width="12" height="12"><path d="M4 6l4 4 4-4z"/></svg>
+      </button>
+      <div class="dd-menu" id="themeMenu" role="listbox" tabindex="-1"></div>
+    </div>
+    <button id="refresh" class="primary">Refresh</button>
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label for="filter">Filter</label>
+      <input type="text" id="filter" placeholder="title, repo, or author…" size="22" />
+    </div>
+    <div class="field">
+      <label for="userInput">Add user</label>
+      <input type="text" id="userInput" placeholder="github-login" size="16" />
+      <button id="addUser">Add</button>
+    </div>
+    <div class="chips" id="users"></div>
+  </div>
+
+  <div class="controls">
+    <label title="Time window for the Merged & Closed columns">Period</label>
+    <div class="chips" id="periods"></div>
+    <label style="margin-left:8px">Orgs</label>
+    <div class="chips" id="orgs"><span class="status">loading…</span></div>
+  </div>
+</header>
+
+<div class="board" id="board"></div>
+
+<script>
+const GQL = "/api/graphql"; // proxied by server.js using your gh CLI auth
+const COLUMNS = [
+  { key: "draft",    label: "Draft",               cls: "col-draft" },
+  { key: "needs",    label: "Needs review",        cls: "col-needs" },
+  { key: "reviewed", label: "Reviewed / Approved", cls: "col-reviewed" },
+  { key: "merged",   label: "Merged",              cls: "col-merged", windowed: true },
+  { key: "closed",   label: "Closed",              cls: "col-closed", windowed: true },
+];
+const DAY = 24 * 60 * 60 * 1000;
+// time window applied to the Merged & Closed columns (days: null = no limit)
+const PERIODS = [
+  { label: "1w",  days: 7 },
+  { label: "2w",  days: 14 },
+  { label: "1m",  days: 30 },
+  { label: "3m",  days: 90 },
+  { label: "6m",  days: 180 },
+  { label: "All", days: null },
+];
+
+// keys: bg surface surface2 border text muted accent draft needs reviewed merged closed shadow
+const THEMES = {
+  "Studio": { bg:"#f4f4f5", surface:"#ffffff", surface2:"#ffffff", border:"#e4e4e7", text:"#030711", muted:"#71717a", accent:"#6b26d9", draft:"#71717a", needs:"#b45309", reviewed:"#15803d", merged:"#7c3aed", closed:"#ef4444", shadow:"0 1px 3px rgba(0,0,0,.12)" },
+  "Light": { bg:"#f4f4f5", surface:"#ffffff", surface2:"#ffffff", border:"#e4e4e7", text:"#09090b", muted:"#71717a", accent:"#993cf6", draft:"#71717a", needs:"#b45309", reviewed:"#15803d", merged:"#7c3aed", closed:"#ef4444", shadow:"0 1px 3px rgba(0,0,0,.12)" },
+  "GitHub Light": { bg:"#f0f2f4", surface:"#ffffff", surface2:"#ffffff", border:"#d0d6dc", text:"#23282e", muted:"#57616b", accent:"#0969d7", draft:"#57616b", needs:"#b45309", reviewed:"#15803d", merged:"#7c3aed", closed:"#dc2828", shadow:"0 1px 3px rgba(0,0,0,.12)" },
+  "Catppuccin Latte": { bg:"#d8dce4", surface:"#eff1f5", surface2:"#f6f7f9", border:"#ced2d9", text:"#4b4e68", muted:"#6c6f84", accent:"#9c49d0", draft:"#6c6f84", needs:"#b45309", reviewed:"#15803d", merged:"#7c3aed", closed:"#d20f39", shadow:"0 1px 3px rgba(0,0,0,.12)" },
+  "Rose": { bg:"#f4f4f5", surface:"#ffffff", surface2:"#ffffff", border:"#e4e4e7", text:"#09090b", muted:"#71717a", accent:"#e11d48", draft:"#71717a", needs:"#b45309", reviewed:"#15803d", merged:"#7c3aed", closed:"#ef4444", shadow:"0 1px 3px rgba(0,0,0,.12)" },
+  "Sky": { bg:"#dff0fb", surface:"#ffffff", surface2:"#ffffff", border:"#e2e8f0", text:"#020817", muted:"#64748b", accent:"#0c8eca", draft:"#64748b", needs:"#b45309", reviewed:"#15803d", merged:"#7c3aed", closed:"#ef4444", shadow:"0 1px 3px rgba(0,0,0,.12)" },
+  "California hugs": { bg:"#f5ebdb", surface:"#fff9f0", surface2:"#fcf6ee", border:"#e8decf", text:"#111c27", muted:"#647587", accent:"#0b81b7", draft:"#647587", needs:"#b45309", reviewed:"#15803d", merged:"#7c3aed", closed:"#ef4343", shadow:"0 1px 3px rgba(0,0,0,.12)" },
+  "GitHub Dark": { bg:"#0d1117", surface:"#14191f", surface2:"#20262c", border:"#282d33", text:"#e8edf2", muted:"#808f9d", accent:"#57abff", draft:"#808f9d", needs:"#d29922", reviewed:"#3fb950", merged:"#a371f7", closed:"#dc2828", shadow:"0 1px 3px rgba(0,0,0,.5)" },
+  "Dracula": { bg:"#272935", surface:"#2e303d", surface2:"#3e4051", border:"#3e4051", text:"#f8f8f2", muted:"#8491b8", accent:"#bf95f9", draft:"#8491b8", needs:"#d29922", reviewed:"#3fb950", merged:"#a371f7", closed:"#e35454", shadow:"0 1px 3px rgba(0,0,0,.5)" },
+  "Nord": { bg:"#2f3541", surface:"#363c4a", surface2:"#444d5f", border:"#404859", text:"#eceff4", muted:"#8994a9", accent:"#87bfcf", draft:"#8994a9", needs:"#d29922", reviewed:"#3fb950", merged:"#a371f7", closed:"#d14747", shadow:"0 1px 3px rgba(0,0,0,.5)" },
+  "Monokai": { bg:"#282923", surface:"#30322a", surface2:"#3e3d32", border:"#444336", text:"#f8f8f2", muted:"#959583", accent:"#a6e22c", draft:"#959583", needs:"#d29922", reviewed:"#3fb950", merged:"#a371f7", closed:"#e04242", shadow:"0 1px 3px rgba(0,0,0,.5)" },
+  "Catppuccin": { bg:"#1e1e2e", surface:"#242438", surface2:"#313244", border:"#333447", text:"#cdd6f4", muted:"#7e819a", accent:"#caa6f7", draft:"#7e819a", needs:"#d29922", reviewed:"#3fb950", merged:"#a371f7", closed:"#f38ca9", shadow:"0 1px 3px rgba(0,0,0,.5)" },
+  "Rosé Pine": { bg:"#1a1825", surface:"#201d2f", surface2:"#262239", border:"#2c293d", text:"#dfdef2", muted:"#7d7996", accent:"#c7ace2", draft:"#7d7996", needs:"#d29922", reviewed:"#3fb950", merged:"#a371f7", closed:"#dd7878", shadow:"0 1px 3px rgba(0,0,0,.5)" },
+  "Synthwave": { bg:"#0b0218", surface:"#160529", surface2:"#221037", border:"#2a1641", text:"#f5e9fb", muted:"#977ab8", accent:"#ff3399", draft:"#977ab8", needs:"#d29922", reviewed:"#3fb950", merged:"#a371f7", closed:"#e14747", shadow:"0 1px 3px rgba(0,0,0,.5)" },
+};
+const DEFAULT_THEME = "GitHub Dark";
+
+function applyTheme(name) {
+  const t = THEMES[name] || THEMES[DEFAULT_THEME];
+  for (const [k, v] of Object.entries(t)) document.documentElement.style.setProperty("--" + k, v);
+}
+
+const store = {
+  get users() { try { return JSON.parse(localStorage.getItem("pr_users")) || []; } catch { return []; } },
+  set users(v) { localStorage.setItem("pr_users", JSON.stringify(v)); },
+  get viewer() { return localStorage.getItem("pr_viewer") || ""; },
+  set viewer(v) { localStorage.setItem("pr_viewer", v); },
+  // map of org login -> false when disabled; missing/true = enabled
+  get orgState() { try { return JSON.parse(localStorage.getItem("pr_orgs")) || {}; } catch { return {}; } },
+  set orgState(v) { localStorage.setItem("pr_orgs", JSON.stringify(v)); },
+  get theme() { return localStorage.getItem("pr_theme") || DEFAULT_THEME; },
+  set theme(v) { localStorage.setItem("pr_theme", v); },
+  get sound() { return localStorage.getItem("pr_sound") !== "off"; }, // default on
+  set sound(v) { localStorage.setItem("pr_sound", v ? "on" : "off"); },
+  get periodDays() { const v = localStorage.getItem("pr_period"); if (v === null) return 14; return v === "all" ? null : Number(v); },
+  set periodDays(v) { localStorage.setItem("pr_period", v === null ? "all" : String(v)); },
+};
+
+const $ = (id) => document.getElementById(id);
+const userInputEl = $("userInput"), usersEl = $("users"), orgsEl = $("orgs"),
+      periodsEl = $("periods"), filterEl = $("filter"), statusEl = $("status"), boardEl = $("board");
+let filterText = "";
+let loadMeta = "";      // "updated HH:MM · N API calls left" — set on each load
+let loadFailed = [];    // users that failed to load on the last fetch
+
+let currentPRs = [];   // last fetched PR set
+let knownOrgs = [];    // orgs the viewer belongs to
+
+/* ---- metallic hover sound (Web Audio, synthesized — no files) ---- */
+let soundOn = store.sound;
+let audioCtx = null;
+let lastBlip = 0;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  }
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+
+function playHover() {
+  if (!soundOn || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  if (now - lastBlip < 0.04) return; // throttle rapid sweeps
+  lastBlip = now;
+
+  // bandpass gives the bright "metallic" tick; inharmonic partials = not a pure tone
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = "bandpass"; bp.frequency.value = 3200; bp.Q.value = 6;
+  const master = audioCtx.createGain();
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(0.10, now + 0.004); // fast click attack
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 0.085); // short decay
+  bp.connect(master); master.connect(audioCtx.destination);
+
+  [2350, 3170, 4270].forEach((f, i) => {
+    const osc = audioCtx.createOscillator();
+    osc.type = "square";
+    osc.frequency.value = f;
+    const g = audioCtx.createGain();
+    g.gain.value = 1 / (i + 1.5);
+    osc.connect(g); g.connect(bp);
+    osc.start(now); osc.stop(now + 0.09);
+  });
+}
+
+function renderSoundBtn() {
+  $("sound").textContent = soundOn ? "🔊" : "🔇";
+}
+
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.classList.toggle("error", !!isError);
+}
+
+const PR_FRAGMENT = `
+fragment PR on PullRequest {
+  number title url isDraft state reviewDecision
+  createdAt updatedAt mergedAt closedAt
+  repository { nameWithOwner owner { login } }
+  author { login avatarUrl }
+  additions deletions
+  reviews { totalCount }
+  comments { totalCount }
+  labels(first: 6) { nodes { name color } }
+}`;
+
+// --- request throttle + retry ---------------------------------------------
+// GitHub sheds bursts of heavy queries with transient 502/503/504 (gateway
+// timeout) and 403/429 (secondary rate limit) even when the hourly quota is
+// fine. So we (a) cap how many requests are in flight at once to avoid spiking,
+// and (b) retry transient failures with exponential backoff + jitter, honouring
+// Retry-After when GitHub sends it. This is GitHub's documented guidance.
+const MAX_CONCURRENT = 3;   // well under GitHub's 100-concurrent ceiling; avoids the burst
+const MAX_TRIES = 5;
+let inFlight = 0;
+const waiters = [];
+function acquireSlot() {
+  if (inFlight < MAX_CONCURRENT) { inFlight++; return Promise.resolve(); }
+  return new Promise(resolve => waiters.push(resolve));
+}
+function releaseSlot() {
+  const next = waiters.shift();
+  if (next) next(); else inFlight--; // hand the slot straight to a waiter, else free it
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const RETRYABLE = new Set([502, 503, 504, 403, 429]);
+
+async function graphql(query) {
+  await acquireSlot();
+  try {
+    for (let attempt = 1; ; attempt++) {
+      let res;
+      try {
+        res = await fetch(GQL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
+      } catch (netErr) {
+        if (attempt >= MAX_TRIES) throw new Error("network error reaching server.js");
+        await sleep(backoffMs(attempt)); continue;
+      }
+      if (RETRYABLE.has(res.status) && attempt < MAX_TRIES) {
+        const ra = Number(res.headers.get("retry-after"));
+        await sleep(ra > 0 ? ra * 1000 : backoffMs(attempt));
+        continue;
+      }
+      if (!res.ok) throw new Error(`GitHub error ${res.status}${res.status >= 500 ? " — try Refresh" : ""}`);
+      const json = await res.json();
+      if (json.errors) throw new Error(json.errors.map(e => e.message).join("; "));
+      return json.data;
+    }
+  } finally {
+    releaseSlot();
+  }
+}
+// exponential backoff (1s, 2s, 4s, 8s…) capped at 8s, with jitter to de-sync parallel retries
+function backoffMs(attempt) { return Math.min(1000 * 2 ** (attempt - 1), 8000) + Math.floor(Math.random() * 400); }
+
+async function fetchIdentity() {
+  const data = await graphql(`query {
+    viewer { login organizations(first: 100) { nodes { login } } }
+  }`);
+  return {
+    login: data.viewer.login,
+    orgs: (data.viewer.organizations?.nodes || []).map(o => o.login),
+  };
+}
+
+// One page of a search. Page size is capped at 50 because the PR fragment pulls
+// expensive fields (additions/deletions force a diff compute); asking for ~100
+// PRs' worth at once trips GitHub's RESOURCE_LIMITS_EXCEEDED and nulls every node.
+// Transient 502/503/504/403/429 are handled by graphql()'s retry/throttle layer.
+async function searchPage(query, first, after) {
+  const afterArg = after ? `, after: ${JSON.stringify(after)}` : "";
+  return graphql(
+    `query { search(query: ${JSON.stringify(query)}, type: ISSUE, first: ${first}${afterArg}) { nodes { ...PR } pageInfo { hasNextPage endCursor } } rateLimit { remaining } }\n${PR_FRAGMENT}`
+  );
+}
+
+// Paginate a search up to `cap` results, 50 per page (safely under the resource limit).
+async function searchPRs(query, cap) {
+  const PAGE = 50;
+  const nodes = []; let after = null, remaining = null;
+  while (nodes.length < cap) {
+    const data = await searchPage(query, Math.min(PAGE, cap - nodes.length), after);
+    const s = data.search;
+    for (const n of (s?.nodes || [])) if (n) nodes.push(n);
+    remaining = data.rateLimit?.remaining ?? remaining;
+    if (!s?.pageInfo?.hasNextPage) break;
+    after = s.pageInfo.endCursor;
+  }
+  return { nodes, remaining };
+}
+
+// Fetch open and closed PRs in SEPARATE queries per user. A single combined
+// query sorted by updated-desc mixes states, so a burst of recently-updated
+// merged/closed PRs (e.g. during an org-wide audit) can push older-but-still-open
+// PRs past the fetch cap and drop them from the board entirely. Open PRs are always
+// shown regardless of age, so they get their own query and are fetched in full;
+// closed/merged are bounded (the Period filter windows them anyway).
+// Requests stay small and run in parallel — batching many into one aliased query
+// makes GitHub's GraphQL time out (502).
+async function fetchUserPRs(user) {
+  const [open, closed] = await Promise.all([
+    searchPRs(`author:${user} is:pr is:open sort:updated-desc`, 500),   // open: fetch (effectively) all
+    searchPRs(`author:${user} is:pr is:closed sort:updated-desc`, 200), // recent closed/merged; Period windows it
+  ]);
+  return { nodes: [...open.nodes, ...closed.nodes], remaining: closed.remaining ?? open.remaining };
+}
+
+async function fetchPRs(users) {
+  const results = await Promise.allSettled(users.map(u => fetchUserPRs(u)));
+  const seen = new Set(); const prs = []; const failed = []; let remaining = null;
+  results.forEach((r, i) => {
+    if (r.status !== "fulfilled") { failed.push(users[i]); return; }
+    if (r.value.remaining != null) remaining = r.value.remaining;
+    for (const n of r.value.nodes) {
+      if (!n || !n.number || seen.has(n.url)) continue;
+      seen.add(n.url); prs.push(n);
+    }
+  });
+  return { prs, remaining, failed };
+}
+
+function orgEnabled(login) { return store.orgState[login] !== false; }
+
+// cutoff = oldest timestamp (ms) allowed in the windowed columns; -Infinity = no limit
+function bucket(pr, cutoff) {
+  if (pr.state === "MERGED")
+    return (new Date(pr.mergedAt).getTime() >= cutoff) ? "merged" : null;
+  if (pr.state === "CLOSED")
+    return (new Date(pr.closedAt).getTime() >= cutoff) ? "closed" : null;
+  if (pr.isDraft) return "draft";
+  const reviewed = pr.reviewDecision === "APPROVED"
+    || pr.reviewDecision === "CHANGES_REQUESTED"
+    || (pr.reviews?.totalCount || 0) > 0;
+  return reviewed ? "reviewed" : "needs";
+}
+
+function timeAgo(iso) {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  const u = [[31536000,"y"],[2592000,"mo"],[604800,"w"],[86400,"d"],[3600,"h"],[60,"m"]];
+  for (const [secs, lbl] of u) if (s >= secs) return Math.floor(s / secs) + lbl;
+  return "just now";
+}
+
+function reviewBadge(pr) {
+  if (pr.reviewDecision === "APPROVED") return `<span class="badge approved">approved</span>`;
+  if (pr.reviewDecision === "CHANGES_REQUESTED") return `<span class="badge changes">changes</span>`;
+  if ((pr.reviews?.totalCount || 0) > 0) return `<span class="badge commented">reviewed</span>`;
+  return "";
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function cardHTML(pr) {
+  const ts = pr.state === "MERGED" ? pr.mergedAt : pr.state === "CLOSED" ? pr.closedAt : pr.updatedAt;
+  const labels = (pr.labels?.nodes || []).map(l =>
+    `<span class="lbl" style="background:#${l.color}22;border-color:#${l.color}88">${esc(l.name)}</span>`
+  ).join("");
+  return `<a class="card" href="${pr.url}" target="_blank" rel="noopener">
+    <div class="repo">${esc(pr.repository.nameWithOwner)}</div>
+    <div class="title">${esc(pr.title)}</div>
+    ${labels ? `<div class="labels">${labels}</div>` : ""}
+    <div class="meta">
+      <span class="num">#${pr.number}</span>
+      <span class="author"><img class="avatar" src="${pr.author?.avatarUrl || ''}" alt=""/>${esc(pr.author?.login || "?")}</span>
+      <span class="diff"><span class="add">+${pr.additions}</span> <span class="del">−${pr.deletions}</span></span>
+      ${pr.comments?.totalCount ? `<span>💬 ${pr.comments.totalCount}</span>` : ""}
+      ${reviewBadge(pr)}
+      <span style="margin-left:auto">${timeAgo(ts)}</span>
+    </div>
+  </a>`;
+}
+
+function periodLabel() {
+  const p = PERIODS.find(p => p.days === store.periodDays);
+  return p ? p.label : `${store.periodDays}d`;
+}
+
+function render() {
+  const days = store.periodDays;
+  const cutoff = days == null ? -Infinity : Date.now() - days * DAY;
+  const q = filterText.trim().toLowerCase();
+  const prs = currentPRs.filter(pr => {
+    if (!orgEnabled(pr.repository.owner.login)) return false;
+    if (!q) return true;
+    const hay = `${pr.title} ${pr.repository.nameWithOwner} ${pr.author?.login || ""} #${pr.number}`.toLowerCase();
+    return hay.includes(q);
+  });
+  const cols = {}; COLUMNS.forEach(c => cols[c.key] = []);
+  for (const pr of prs) { const b = bucket(pr, cutoff); if (b) cols[b].push(pr); }
+  for (const c of COLUMNS) cols[c.key].sort((a, b) => {
+    const ta = c.key === "merged" ? a.mergedAt : c.key === "closed" ? a.closedAt : a.updatedAt;
+    const tb = c.key === "merged" ? b.mergedAt : c.key === "closed" ? b.closedAt : b.updatedAt;
+    return new Date(tb) - new Date(ta);
+  });
+  const win = periodLabel();
+  boardEl.innerHTML = COLUMNS.map(c => `
+    <section class="column ${c.cls}">
+      <div class="col-head"><span class="dot"></span>${c.label}${c.windowed ? ` <span class="win">· ${win}</span>` : ""}<span class="count">${cols[c.key].length}</span></div>
+      <div class="col-body">
+        ${cols[c.key].length ? cols[c.key].map(cardHTML).join("") : `<div class="empty">Nothing here</div>`}
+      </div>
+    </section>`).join("");
+
+  // status: "X of Y shown" (X = visible after filters, Y = total loaded)
+  const shown = COLUMNS.reduce((n, c) => n + cols[c.key].length, 0);
+  const total = currentPRs.length;
+  let s = shown === total ? `${total} PRs` : `${shown} of ${total} shown`;
+  if (loadMeta) s += ` · ${loadMeta}`;
+  if (loadFailed.length) setStatus(`${s} · couldn't load: ${loadFailed.join(", ")} (try Refresh)`, true);
+  else setStatus(s);
+}
+
+function renderPeriods() {
+  periodsEl.innerHTML = PERIODS.map(p =>
+    `<span class="org ${p.days === store.periodDays ? "on" : ""}" data-days="${p.days == null ? "" : p.days}">${p.label}</span>`
+  ).join("");
+  periodsEl.querySelectorAll(".org").forEach(el => {
+    el.onmouseover = playHover;
+    el.onclick = () => {
+      store.periodDays = el.dataset.days === "" ? null : Number(el.dataset.days);
+      renderPeriods(); render();
+    };
+  });
+}
+
+function renderUsers() {
+  const users = store.users, viewer = store.viewer;
+  usersEl.innerHTML = users.map(u =>
+    `<span class="chip ${u === viewer ? "me" : ""}">${esc(u)}${u === viewer ? " (you)" : ""}<button data-user="${esc(u)}" title="Remove">×</button></span>`
+  ).join("");
+  usersEl.querySelectorAll("button").forEach(b => b.onclick = () => {
+    store.users = store.users.filter(u => u !== b.dataset.user);
+    renderUsers(); load();
+  });
+}
+
+function renderOrgs() {
+  // union of orgs the viewer belongs to + owners actually present in results
+  const owners = new Set(knownOrgs);
+  for (const pr of currentPRs) owners.add(pr.repository.owner.login);
+  const list = [...owners].sort((a, b) => a.localeCompare(b));
+  if (!list.length) { orgsEl.innerHTML = `<span class="status">no orgs</span>`; return; }
+  orgsEl.innerHTML = list.map(o =>
+    `<span class="org ${orgEnabled(o) ? "on" : "off"}" data-org="${esc(o)}"><span class="tick">✓</span>${esc(o)}</span>`
+  ).join("");
+  orgsEl.querySelectorAll(".org").forEach(el => el.onclick = () => {
+    const o = el.dataset.org, state = store.orgState;
+    state[o] = !orgEnabled(o) ? true : false; // toggle
+    store.orgState = state;
+    renderOrgs(); render();
+  });
+}
+
+function addUser(name) {
+  name = name.trim().replace(/^@/, "");
+  if (!name) return;
+  const users = store.users;
+  if (!users.includes(name)) { users.push(name); store.users = users; renderUsers(); load(); }
+}
+
+let loading = false;
+async function load() {
+  if (loading) return;
+  // identify viewer + orgs once
+  if (!store.viewer || !knownOrgs.length) {
+    try {
+      setStatus("Identifying you…");
+      const { login, orgs } = await fetchIdentity();
+      store.viewer = login; knownOrgs = orgs;
+      if (store.users.length === 0) store.users = [login];
+      renderUsers();
+    } catch (e) { setStatus(e.message, true); return; }
+  }
+  if (store.users.length === 0) { store.users = [store.viewer]; renderUsers(); }
+
+  loading = true; $("refresh").disabled = true;
+  setStatus("Loading PRs…");
+  try {
+    const { prs, remaining, failed } = await fetchPRs(store.users);
+    currentPRs = prs;
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    loadMeta = `updated ${now}${remaining != null ? ` · ${remaining} API calls left` : ""}`;
+    loadFailed = failed;
+    renderOrgs();
+    render(); // render() writes the "X of Y shown" status using loadMeta/loadFailed
+  } catch (e) {
+    setStatus(e.message, true);
+  } finally {
+    loading = false; $("refresh").disabled = false;
+  }
+}
+
+// --- wire up ---
+// custom theme dropdown
+const ddRoot = $("themeDD"), ddBtn = $("themeBtn"), ddMenu = $("themeMenu"), ddLabel = $("themeLabel");
+const SWATCH_KEYS = ["accent", "needs", "reviewed", "merged", "closed"];
+
+function buildThemeMenu() {
+  ddMenu.innerHTML = Object.entries(THEMES).map(([name, t]) => {
+    const sw = SWATCH_KEYS.map(k => `<i style="background:${t[k]}"></i>`).join("");
+    return `<button class="dd-item" role="option" data-theme="${name}" tabindex="-1">
+      <span class="sw">${sw}</span><span class="dd-name">${name}</span><span class="dd-check">✓</span>
+    </button>`;
+  }).join("");
+}
+function selectTheme(name) {
+  store.theme = name; applyTheme(name); ddLabel.textContent = name;
+  ddMenu.querySelectorAll(".dd-item").forEach(el =>
+    el.classList.toggle("sel", el.dataset.theme === name));
+}
+function openDD(open) {
+  ddRoot.classList.toggle("open", open);
+  ddBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) { const sel = ddMenu.querySelector(".dd-item.sel"); if (sel) { sel.scrollIntoView({ block: "nearest" }); sel.focus(); } }
+}
+
+buildThemeMenu();
+selectTheme(THEMES[store.theme] ? store.theme : DEFAULT_THEME);
+
+ddBtn.onclick = (e) => { e.stopPropagation(); openDD(!ddRoot.classList.contains("open")); };
+ddMenu.addEventListener("click", (e) => {
+  const item = e.target.closest(".dd-item"); if (!item) return;
+  selectTheme(item.dataset.theme); openDD(false); ddBtn.focus();
+});
+ddMenu.addEventListener("mouseover", (e) => { if (e.target.closest(".dd-item")) playHover(); });
+ddMenu.addEventListener("keydown", (e) => {
+  const items = [...ddMenu.querySelectorAll(".dd-item")];
+  const i = items.indexOf(document.activeElement);
+  if (e.key === "ArrowDown") { e.preventDefault(); (items[i + 1] || items[0]).focus(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); (items[i - 1] || items[items.length - 1]).focus(); }
+  else if (e.key === "Escape") { openDD(false); ddBtn.focus(); }
+});
+ddBtn.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") { e.preventDefault(); openDD(true); }
+});
+document.addEventListener("click", (e) => { if (!ddRoot.contains(e.target)) openDD(false); });
+
+$("addUser").onclick = () => { addUser(userInputEl.value); userInputEl.value = ""; };
+userInputEl.onkeydown = (e) => { if (e.key === "Enter") { addUser(userInputEl.value); userInputEl.value = ""; } };
+filterEl.oninput = () => { filterText = filterEl.value; render(); };
+filterEl.onkeydown = (e) => { if (e.key === "Escape") { filterEl.value = ""; filterText = ""; render(); } };
+$("refresh").onclick = load;
+
+// sound toggle
+renderSoundBtn();
+$("sound").onclick = () => {
+  soundOn = !soundOn; store.sound = soundOn; renderSoundBtn();
+  if (soundOn) { ensureAudio(); playHover(); } // click is a gesture → unlocks audio + previews
+};
+// browsers only allow audio after a user gesture — unlock on the first interaction
+window.addEventListener("pointerdown", ensureAudio, { once: true });
+// play on entering a new card (delegated, survives re-renders)
+let lastCard = null;
+boardEl.addEventListener("mouseover", (e) => {
+  const card = e.target.closest(".card");
+  if (card && card !== lastCard) { lastCard = card; playHover(); }
+  else if (!card) lastCard = null;
+});
+
+// Gate the board behind GitHub sign-in when the server is in hosted (OAuth) mode.
+async function boot() {
+  let cfg;
+  try { cfg = await (await fetch("/api/config")).json(); }
+  catch { cfg = { oauth: false, authenticated: true }; } // treat unreachable config as local mode
+
+  if (cfg.oauth && !cfg.authenticated) {
+    $("loginOverlay").classList.remove("hidden");
+    return; // don't touch GitHub until the user has signed in
+  }
+  $("loginOverlay").classList.add("hidden");
+
+  if (cfg.user && cfg.user.login) {
+    // if a different account signed in on this browser, drop the previous user's list
+    if (store.viewer && store.viewer !== cfg.user.login) store.users = [];
+    store.viewer = cfg.user.login;
+    $("auth").innerHTML =
+      `<img class="avatar" src="${cfg.user.avatar}" alt=""/>` +
+      `<span class="who">${esc(cfg.user.login)}</span>` +
+      `<a class="logout" href="/logout">Log out</a>`;
+  }
+
+  renderUsers();
+  renderPeriods();
+  load();
+  setInterval(load, 5 * 60 * 1000); // auto-refresh every 5 min
+}
+boot();
+</script>
+</body>
+</html>

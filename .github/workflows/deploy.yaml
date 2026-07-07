@@ -1,0 +1,64 @@
+name: Deploy infra (Terraform / HCP)
+
+# Runs Terraform against HCP Terraform (remote state + remote runs).
+#
+# Required in the repo:
+#   - Secret  TF_API_TOKEN            — an HCP Terraform team/user API token
+#   - Variable TF_CLOUD_ORGANIZATION  — your HCP Terraform organization
+#   - Variable TF_WORKSPACE           — workspace name (defaults to "pr-dashboard")
+# Set in the HCP workspace (so they never touch this repo):
+#   - github_client_id / github_client_secret  (Terraform variables; secret marked sensitive)
+
+on:
+  push:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/deploy.yaml"]
+  pull_request:
+    paths: ["infra/**", ".github/workflows/deploy.yaml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let two infra runs race on the same workspace/state.
+concurrency:
+  group: pr-dashboard-infra
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+      TF_WORKSPACE: ${{ vars.TF_WORKSPACE || 'pr-dashboard' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Init
+        run: terraform init -input=false
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Plan
+        run: terraform plan -input=false
+
+      # Apply only on pushes to main (not on PRs).
+      - name: Apply
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve -input=false
