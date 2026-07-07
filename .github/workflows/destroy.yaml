@@ -21,6 +21,7 @@ jobs:
     name: Terraform destroy
     if: ${{ github.event.inputs.confirm == 'DESTROY' }}
     runs-on: ubuntu-latest
+    environment: production
     defaults:
       run:
         working-directory: infra
