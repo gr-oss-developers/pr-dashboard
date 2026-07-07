@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Bootstraps the PR Dashboard on first boot: install runtime, fetch the app, run it as a
 # systemd service on port 80. (No `set -x` — the OAuth secret must not land in the log.)
+# app-version: ${app_version}   (changing this replaces the instance so it re-clones main)
 set -euo pipefail
 
 dnf install -y nodejs git

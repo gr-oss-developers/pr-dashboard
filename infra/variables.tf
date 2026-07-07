@@ -78,3 +78,9 @@ variable "oauth_scopes" {
   description = "OAuth scopes requested at sign-in."
   default     = "read:user repo read:org"
 }
+
+variable "app_version" {
+  type        = string
+  description = "Fingerprint of the app files (index.html/server.js). Set by the deploy workflow; a change replaces the instance so it re-clones the latest code."
+  default     = ""
+}

@@ -108,8 +108,10 @@ resource "aws_instance" "app" {
     client_secret = var.github_client_secret
     scopes        = var.oauth_scopes
     redirect_uri  = local.redirect_uri
+    app_version   = var.app_version # fingerprint of the app files; changes force a rebuild
   })
-  # Rebuild (reprovision) when the bootstrap script or its inputs change.
+  # Replace the instance when user_data changes — including when app_version changes,
+  # so a push that edits index.html/server.js re-clones main on a fresh boot.
   user_data_replace_on_change = true
 
   tags = { Name = "pr-dashboard" }

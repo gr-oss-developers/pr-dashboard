@@ -12,9 +12,10 @@ name: Deploy infra (Terraform / HCP)
 on:
   push:
     branches: [main]
-    paths: ["infra/**", ".github/workflows/deploy.yaml"]
+    # App files are included so an app change replaces the instance (re-clones main).
+    paths: ["infra/**", "index.html", "server.js", "start.sh", "stop.sh", ".github/workflows/deploy.yaml"]
   pull_request:
-    paths: ["infra/**", ".github/workflows/deploy.yaml"]
+    paths: ["infra/**", "index.html", "server.js", "start.sh", "stop.sh", ".github/workflows/deploy.yaml"]
   workflow_dispatch:
 
 permissions:
@@ -45,6 +46,11 @@ jobs:
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      # Fingerprint the app files. When they change, TF_VAR_app_version changes, which
+      # changes user_data, which replaces the instance so it re-clones the latest main.
+      - name: Fingerprint app
+        run: echo "TF_VAR_app_version=$(cat ../index.html ../server.js | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
 
       - name: Init
         run: terraform init -input=false

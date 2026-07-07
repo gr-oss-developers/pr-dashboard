@@ -1,0 +1,49 @@
+name: Destroy infra (Terraform / HCP)
+
+# Tears down everything Terraform manages. Manual only, with a typed confirmation.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DESTROY to confirm you want to tear everything down'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-dashboard-infra
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    name: Terraform destroy
+    if: ${{ github.event.inputs.confirm == 'DESTROY' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+      TF_WORKSPACE: ${{ vars.TF_WORKSPACE || 'pr-dashboard' }}
+      # Placeholder so the required vars resolve during destroy; real values live in the
+      # HCP workspace, and destroy doesn't need them anyway.
+      TF_VAR_github_client_id: "destroy"
+      TF_VAR_github_client_secret: "destroy"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Init
+        run: terraform init -input=false
+
+      - name: Destroy
+        run: terraform destroy -auto-approve -input=false
