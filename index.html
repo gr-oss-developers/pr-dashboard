@@ -30,14 +30,56 @@
     color: var(--text);
     background: var(--bg);
   }
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 12px 20px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar {
+    width: 280px; flex: none; height: 100vh; overflow: hidden;
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    transition: width .2s ease;
   }
+  /* full-width header bar with the logo (brand collapses to just the icon) */
+  .sb-header {
+    flex: none; height: 56px; display: flex; align-items: center; gap: 8px;
+    padding: 0 16px; border-bottom: 1px solid var(--border);
+    font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden;
+  }
+  .sb-header svg { fill: var(--accent); flex: none; }
+  /* scrollable controls area */
+  .sb-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 16px;
+  }
+  /* full-width bottom collapse bar */
+  #sidebarToggle {
+    flex: none; width: 100%; display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px; border: none; border-top: 1px solid var(--border);
+    border-radius: 0; background: transparent; color: var(--muted);
+    font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap;
+    transition: background .15s ease, color .15s ease;
+  }
+  #sidebarToggle:hover { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text); }
+  #sidebarToggle svg { fill: currentColor; flex: none; display: block; transition: transform .2s ease; }
+  /* collapsed → narrow rail: only the logo icon + the expand chevron */
+  .app.collapsed .sidebar { width: 56px; }
+  .app.collapsed .sb-header { justify-content: center; padding: 0; }
+  .app.collapsed .sb-header span { display: none; }
+  .app.collapsed .sb-body { display: none; }
+  .app.collapsed #sidebarToggle { justify-content: center; padding-left: 0; padding-right: 0; }
+  .app.collapsed .sb-toggle-label { display: none; }
+  .app.collapsed #sidebarToggle svg { transform: rotate(180deg); }
+  .sb-section { display: flex; flex-direction: column; gap: 8px; }
+  .sb-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .sb-row { display: flex; align-items: center; gap: 8px; }
+  .sidebar input[type="text"] { width: 100%; box-sizing: border-box; }
+  .sidebar .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sidebar .status { font-size: 11px; min-height: 1em; }
+  .main { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .topbar {
+    flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .topbar button { display: inline-flex; align-items: center; }
+  .topbar button svg { fill: currentColor; display: block; }
   .topline { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
   h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 8px; }
   h1 svg { fill: var(--accent); }
@@ -97,13 +139,15 @@
   .org.off { opacity: .55; text-decoration: line-through; }
 
   .board {
+    flex: 1; min-height: 0; box-sizing: border-box;
     display: grid;
     grid-template-columns: repeat(5, minmax(240px, 1fr));
-    gap: 12px; padding: 16px 20px 40px; align-items: start; overflow-x: auto;
+    gap: 12px; padding: 16px 20px; align-items: stretch; overflow: auto;
+    grid-auto-rows: minmax(0, 1fr);
   }
   .column { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; min-height: 80px; }
   .col-head {
-    padding: 10px 12px; display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex: none;
     font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--border);
   }
   .col-head .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
@@ -114,7 +158,7 @@
   .col-reviewed .dot { background: var(--reviewed); }
   .col-merged .dot { background: var(--merged); }
   .col-closed .dot { background: var(--closed); }
-  .col-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: calc(100vh - 230px); }
+  .col-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; min-height: 0; }
   .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 16px 8px; font-style: italic; }
 
   /* themed scrollbars — global, so every scrollbar (vertical & horizontal, anywhere) matches */
@@ -384,48 +428,63 @@
     </a>
   </div>
 </div>
-<header>
-  <div class="topline">
-    <h1>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sb-header">
       <svg height="22" width="22" viewBox="0 0 16 16"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"></path></svg>
-      PR Dashboard
-    </h1>
-    <div class="spacer"></div>
-    <span id="auth" class="auth"></span>
-    <span id="status" class="status"></span>
-    <button id="sound" title="Hover sound on/off"></button>
-    <div class="dropdown" id="themeDD">
-      <button class="dd-btn" id="themeBtn" title="Theme" aria-haspopup="listbox" aria-expanded="false">
-        <span id="themeLabel">Theme</span>
-        <svg class="dd-caret" viewBox="0 0 16 16" width="12" height="12"><path d="M4 6l4 4 4-4z"/></svg>
-      </button>
-      <div class="dd-menu" id="themeMenu" role="listbox" tabindex="-1"></div>
+      <span>PR Dashboard</span>
     </div>
-    <button id="refresh" class="primary">Refresh</button>
-  </div>
 
-  <div class="controls">
-    <div class="field">
-      <label for="filter">Filter</label>
-      <input type="text" id="filter" placeholder="title, repo, or author…" size="22" />
+    <div class="sb-body">
+      <span id="auth" class="auth"></span>
+      <span id="status" class="status"></span>
+
+      <div class="sb-section">
+        <label class="sb-label" for="filter">Filter</label>
+        <input type="text" id="filter" placeholder="title, repo, or author…" />
+      </div>
+
+      <div class="sb-section">
+        <label class="sb-label" for="userInput">Users</label>
+        <div class="sb-row">
+          <input type="text" id="userInput" placeholder="github-login" />
+          <button id="addUser">Add</button>
+        </div>
+        <div class="chips" id="users"></div>
+      </div>
+
+      <div class="sb-section">
+        <label class="sb-label" title="Time window for the Merged & Closed columns">Period</label>
+        <div class="chips" id="periods"></div>
+      </div>
+
+      <div class="sb-section">
+        <label class="sb-label">Orgs</label>
+        <div class="chips" id="orgs"><span class="status">loading…</span></div>
+      </div>
     </div>
-    <div class="field">
-      <label for="userInput">Add user</label>
-      <input type="text" id="userInput" placeholder="github-login" size="16" />
-      <button id="addUser">Add</button>
+
+    <button id="sidebarToggle" title="Collapse sidebar">
+      <svg height="16" width="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.78 12.78a.75.75 0 0 1-1.06 0L4.47 8.53a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L6.06 8l3.72 3.72a.75.75 0 0 1 0 1.06Z"/></svg>
+      <span class="sb-toggle-label">Collapse</span>
+    </button>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="dropdown" id="themeDD">
+        <button class="dd-btn" id="themeBtn" title="Theme" aria-haspopup="listbox" aria-expanded="false">
+          <span id="themeLabel">Theme</span>
+          <svg class="dd-caret" viewBox="0 0 16 16" width="12" height="12"><path d="M4 6l4 4 4-4z"/></svg>
+        </button>
+        <div class="dd-menu" id="themeMenu" role="listbox" tabindex="-1"></div>
+      </div>
+      <button id="sound" title="Hover sound on/off"></button>
+      <button id="refresh" title="Refresh"><svg height="16" width="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"/></svg></button>
     </div>
-    <div class="chips" id="users"></div>
-  </div>
-
-  <div class="controls">
-    <label title="Time window for the Merged & Closed columns">Period</label>
-    <div class="chips" id="periods"></div>
-    <label style="margin-left:8px">Orgs</label>
-    <div class="chips" id="orgs"><span class="status">loading…</span></div>
-  </div>
-</header>
-
-<div class="board" id="board"></div>
+    <div class="board" id="board"></div>
+  </main>
+</div>
 
 <div id="drawerBackdrop" class="backdrop hidden"></div>
 <aside id="prDrawer" class="drawer hidden" aria-label="Pull request details">
@@ -495,6 +554,8 @@ const store = {
   set sound(v) { localStorage.setItem("pr_sound", v ? "on" : "off"); },
   get periodDays() { const v = localStorage.getItem("pr_period"); if (v === null) return 14; return v === "all" ? null : Number(v); },
   set periodDays(v) { localStorage.setItem("pr_period", v === null ? "all" : String(v)); },
+  get sidebarCollapsed() { return localStorage.getItem("pr_sidebar") === "collapsed"; },
+  set sidebarCollapsed(v) { localStorage.setItem("pr_sidebar", v ? "collapsed" : "open"); },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -905,6 +966,11 @@ userInputEl.onkeydown = (e) => { if (e.key === "Enter") { addUser(userInputEl.va
 filterEl.oninput = () => { filterText = filterEl.value; render(); };
 filterEl.onkeydown = (e) => { if (e.key === "Escape") { filterEl.value = ""; filterText = ""; render(); } };
 $("refresh").onclick = load;
+
+// collapsible sidebar (persisted)
+const appEl = document.querySelector(".app");
+if (store.sidebarCollapsed) appEl.classList.add("collapsed");
+$("sidebarToggle").onclick = () => { store.sidebarCollapsed = appEl.classList.toggle("collapsed"); };
 
 // sound toggle
 renderSoundBtn();
