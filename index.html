@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>PR Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
     --bg: #0d1117;
@@ -114,18 +117,16 @@
   .col-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: calc(100vh - 230px); }
   .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 16px 8px; font-style: italic; }
 
-  /* themed scrollbars (follow the active theme) */
-  .col-body, .board, .dd-menu { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
-  .col-body::-webkit-scrollbar, .board::-webkit-scrollbar, .dd-menu::-webkit-scrollbar { width: 10px; height: 10px; }
-  .col-body::-webkit-scrollbar-track, .board::-webkit-scrollbar-track, .dd-menu::-webkit-scrollbar-track { background: transparent; }
-  .col-body::-webkit-scrollbar-thumb, .board::-webkit-scrollbar-thumb, .dd-menu::-webkit-scrollbar-thumb {
+  /* themed scrollbars — global, so every scrollbar (vertical & horizontal, anywhere) matches */
+  html { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
     background: color-mix(in srgb, var(--muted) 45%, transparent);
     border: 2px solid transparent; border-radius: 999px; background-clip: padding-box;
   }
-  .col-body::-webkit-scrollbar-thumb:hover, .board::-webkit-scrollbar-thumb:hover, .dd-menu::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--accent) 75%, transparent); background-clip: padding-box;
-  }
-  .col-body::-webkit-scrollbar-corner, .board::-webkit-scrollbar-corner { background: transparent; }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--accent) 75%, transparent); background-clip: padding-box; }
+  ::-webkit-scrollbar-corner { background: transparent; }
 
   .card {
     background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
@@ -212,6 +213,163 @@
   }
   .gh-btn:hover { filter: brightness(1.08); }
   .gh-btn svg { fill: currentColor; }
+
+  /* PR detail drawer */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 80; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100%; width: min(560px, 92vw); z-index: 81;
+    background: var(--surface); border-left: 1px solid var(--border);
+    box-shadow: -8px 0 30px rgba(0,0,0,.35);
+    display: flex; flex-direction: column;
+    transition: transform .18s ease;
+  }
+  .drawer.hidden, .backdrop.hidden { display: none; }
+  .drawer.closing { transform: translateX(100%); }
+  .drawer-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-bottom: 1px solid var(--border); flex: none;
+  }
+  .drawer-repo { font-size: 12px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drawer-gh { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .drawer-gh:hover { text-decoration: underline; }
+  .drawer-close { all: unset; cursor: pointer; font-size: 22px; line-height: 1; color: var(--muted); padding: 0 4px; }
+  .drawer-close:hover { color: var(--text); }
+  .drawer-body { padding: 16px 18px; overflow-y: auto; }
+  .drawer-body h1.pr-title { font-size: 20px; margin: 0 0 10px; line-height: 1.3; }
+  .drawer-body h1.pr-title .num { color: var(--muted); font-weight: 400; }
+  .pr-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .pr-sub .avatar { width: 20px; height: 20px; }
+  .pr-state { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 2px 9px; border-radius: 999px; color: #fff; }
+  .pr-state.open { background: var(--reviewed); } .pr-state.draft { background: var(--draft); }
+  .pr-state.merged { background: var(--merged); } .pr-state.closed { background: var(--closed); }
+  .pr-branches code { background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-size: 12px; }
+  .pr-section-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; }
+  .pr-body { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; background: var(--bg); overflow-wrap: anywhere; }
+  .pr-body :is(h1,h2,h3){ font-size: 15px; margin: 12px 0 6px; }
+  .pr-body pre { background: var(--surface2); padding: 10px; border-radius: 6px; overflow-x: auto; }
+  .pr-body code { background: var(--surface2); padding: 1px 4px; border-radius: 4px; }
+  .pr-body pre code { background: none; padding: 0; }
+  .pr-body img { max-width: 100%; }
+  .pr-body a { color: var(--accent); }
+  .comment { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+  .comment-head { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--surface2); border-bottom: 1px solid var(--border); border-radius: 8px 8px 0 0; font-size: 12px; }
+  .comment-head .who { font-weight: 600; color: var(--text); }
+  .comment-head .when { color: var(--muted); }
+  .comment-body { padding: 10px 12px; overflow-wrap: anywhere; }
+  .drawer-loading, .drawer-error { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .drawer-error { color: var(--closed); }
+
+  /* timeline (comments/reviews as boxes, events as compact rows) */
+  /* GitHub-style timeline: octicon nodes on a vertical rail */
+  .timeline { position: relative; display: flex; flex-direction: column; gap: 6px; }
+  .timeline::before { content: ""; position: absolute; left: 14px; top: 8px; bottom: 8px; width: 2px; background: var(--border); }
+  .tl-item { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; position: relative; z-index: 1; }
+  .tl-gutter { display: flex; justify-content: center; }
+  .tl-badge { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 3px solid var(--surface); box-sizing: border-box; }
+  .tl-badge .oct { fill: currentColor; display: block; }
+  .tl-badge.gray { background: var(--surface2); color: var(--muted); }
+  .tl-badge.green { background: var(--reviewed); color: #fff; }
+  .tl-badge.purple { background: var(--merged); color: #fff; }
+  .tl-badge.red { background: var(--closed); color: #fff; }
+  .tl-content .comment { margin: 0; }
+  .tl-event { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); min-height: 26px; padding-top: 4px; }
+  .tl-event b { color: var(--text); font-weight: 600; }
+  .tl-event code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  .tl-event a { color: var(--accent); }
+  .tl-text { flex: 1; overflow-wrap: anywhere; }
+  .tl-when { flex: none; white-space: nowrap; }
+  .review-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; }
+  .review-tag.approved { background: color-mix(in srgb, var(--reviewed) 22%, transparent); color: var(--reviewed); }
+  .review-tag.changes  { background: color-mix(in srgb, var(--closed) 22%, transparent); color: var(--closed); }
+  .review-tag.commented { background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--muted); }
+  .comment-head .when { margin-left: auto; }
+
+  /* review threads (grouped inline diff comments, with status) */
+  .thread { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+  .thread > summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface2); font-size: 12px; list-style: none; }
+  .thread > summary::-webkit-details-marker { display: none; }
+  .rc-loc { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .thread-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; }
+  .thread-tag.unresolved { margin-left: auto; background: color-mix(in srgb, var(--needs) 22%, transparent); color: var(--needs); }
+  .thread-tag.resolved   { margin-left: auto; background: color-mix(in srgb, var(--reviewed) 22%, transparent); color: var(--reviewed); }
+  .thread-tag.outdated   { background: var(--bg); color: var(--muted); }
+  .rc-diff { margin: 0; padding: 6px 0; font-size: 11px; background: var(--bg); overflow-x: auto; border-top: 1px solid var(--border); }
+  .rc-diff .dl { display: block; padding: 0 10px; white-space: pre; }
+  .rc-diff .dl.add  { background: color-mix(in srgb, var(--reviewed) 18%, transparent); }
+  .rc-diff .dl.del  { background: color-mix(in srgb, var(--closed) 18%, transparent); }
+  .rc-diff .dl.hunk { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .rc-diff .dl.ctx  { color: var(--muted); }
+  .tc { border-top: 1px solid var(--border); }
+  .rc-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px 0; font-size: 12px; }
+  .rc-head .who { font-weight: 600; } .rc-head .when { margin-left: auto; color: var(--muted); }
+  .tc .comment-body { padding: 4px 10px 8px; }
+
+  /* ===================================================================== */
+  /* Tailwind-UI-style polish — layered on top of the themes (CSS only).    */
+  /* ===================================================================== */
+  :root { --ring: color-mix(in srgb, var(--accent) 55%, transparent); }
+  body {
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.006em;
+  }
+
+  /* Buttons — solid primary, subtle secondary, ring on keyboard focus */
+  button, .dd-btn {
+    border-radius: 8px; font-weight: 500;
+    transition: background .15s ease, box-shadow .15s ease, border-color .15s ease, filter .15s ease;
+  }
+  button.primary { box-shadow: 0 1px 2px rgba(0,0,0,.10); }
+  button.primary:hover { filter: brightness(1.06); }
+  button:not(.primary):hover, .dd-btn:hover { background: color-mix(in srgb, var(--text) 7%, var(--surface2)); }
+  button:focus-visible, .dd-btn:focus-visible, .gh-btn:focus-visible,
+  input:focus-visible, .org:focus-visible, .dd-item:focus-visible {
+    outline: none; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring);
+  }
+
+  /* Inputs — rounded, ring focus */
+  input[type="text"], input[type="password"] {
+    border-radius: 8px; padding: 6px 10px;
+    transition: box-shadow .15s ease, border-color .15s ease;
+  }
+  input[type="text"]:focus, input[type="password"]:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring);
+  }
+
+  /* Cards — shadow-sm, lift + stronger shadow on hover */
+  .card {
+    border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.06);
+    transition: box-shadow .16s ease, transform .16s ease, border-color .16s ease;
+  }
+  .card:hover { box-shadow: 0 6px 16px rgba(0,0,0,.12); transform: translateY(-1px); }
+
+  /* Columns + header */
+  .column { border-radius: 12px; }
+  .col-head { font-weight: 600; letter-spacing: 0; }
+  header { box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+
+  /* Pills / badges — Tailwind soft look with inset ring */
+  .chip, .org { border-radius: 9999px; font-weight: 500; }
+  .lbl, .badge, .review-tag, .thread-tag { border-radius: 6px; font-weight: 500; box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent); }
+  .pr-state { border-radius: 9999px; font-weight: 600; }
+
+  /* Drawer + surfaces — softer, larger shadow */
+  .drawer { box-shadow: -12px 0 44px rgba(0,0,0,.20); }
+  .login-card { border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.30); }
+  .dd-menu { border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.22); }
+
+  /* Smooth theme changes */
+  * { transition-property: background-color, border-color; transition-duration: .12s; }
+
+  /* GitHub-rendered content: readable links + recognizable @mentions in every theme */
+  .pr-body a, .comment-body a { color: var(--accent); text-decoration: none; }
+  .pr-body a:hover, .comment-body a:hover { text-decoration: underline; }
+  .pr-body :is(.user-mention, .team-mention),
+  .comment-body :is(.user-mention, .team-mention) {
+    font-weight: 600; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    padding: 0 4px; border-radius: 5px; text-decoration: none;
+  }
 </style>
 </head>
 <body>
@@ -268,6 +426,16 @@
 </header>
 
 <div class="board" id="board"></div>
+
+<div id="drawerBackdrop" class="backdrop hidden"></div>
+<aside id="prDrawer" class="drawer hidden" aria-label="Pull request details">
+  <div class="drawer-head">
+    <span id="drawerRepo" class="drawer-repo"></span>
+    <a id="drawerGh" class="drawer-gh" href="#" target="_blank" rel="noopener" title="Open on GitHub">Open on GitHub ↗</a>
+    <button id="drawerClose" class="drawer-close" title="Close (Esc)">×</button>
+  </div>
+  <div id="drawerBody" class="drawer-body"></div>
+</aside>
 
 <script>
 const GQL = "/api/graphql"; // proxied by server.js using your gh CLI auth
@@ -551,7 +719,7 @@ function cardHTML(pr) {
   const labels = (pr.labels?.nodes || []).map(l =>
     `<span class="lbl" style="background:#${l.color}22;border-color:#${l.color}88">${esc(l.name)}</span>`
   ).join("");
-  return `<a class="card" href="${pr.url}" target="_blank" rel="noopener">
+  return `<a class="card" href="${pr.url}" target="_blank" rel="noopener" data-url="${esc(pr.url)}">
     <div class="repo">${esc(pr.repository.nameWithOwner)}</div>
     <div class="title">${esc(pr.title)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}
@@ -674,6 +842,7 @@ async function load() {
   try {
     const { prs, remaining, failed } = await fetchPRs(store.users);
     currentPRs = prs;
+    prDetailCache.clear(); // board reloaded → drawer details are stale, refetch on next open
     const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     loadMeta = `updated ${now}${remaining != null ? ` · ${remaining} API calls left` : ""}`;
     loadFailed = failed;
@@ -752,6 +921,225 @@ boardEl.addEventListener("mouseover", (e) => {
   if (card && card !== lastCard) { lastCard = card; playHover(); }
   else if (!card) lastCard = null;
 });
+
+/* ---- PR detail drawer ---------------------------------------------------- */
+const drawerEl = $("prDrawer"), backdropEl = $("drawerBackdrop"),
+      drawerBodyEl = $("drawerBody"), drawerRepoEl = $("drawerRepo"), drawerGhEl = $("drawerGh");
+const fmtDate = (iso) => new Date(iso).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+const prDetailCache = new Map(); // pr.url -> fetched PR detail; cleared on board reload
+
+function openDrawer() { drawerEl.classList.remove("hidden", "closing"); backdropEl.classList.remove("hidden"); }
+function closeDrawer() {
+  drawerEl.classList.add("closing");
+  backdropEl.classList.add("hidden");
+  setTimeout(() => drawerEl.classList.add("hidden"), 180);
+}
+$("drawerClose").onclick = closeDrawer;
+backdropEl.onclick = closeDrawer;
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !drawerEl.classList.contains("hidden")) closeDrawer();
+});
+
+// Left-click a card → open the drawer. ⌘/Ctrl/Shift/middle-click still opens GitHub in a new tab.
+boardEl.addEventListener("click", (e) => {
+  const card = e.target.closest(".card");
+  if (!card) return;
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+  e.preventDefault();
+  const pr = currentPRs.find(p => p.url === card.dataset.url);
+  if (pr) showPR(pr);
+});
+
+function stateClass(d) { return d.state === "MERGED" ? "merged" : d.state === "CLOSED" ? "closed" : d.isDraft ? "draft" : "open"; }
+function stateLabel(d) { return d.state === "MERGED" ? "Merged" : d.state === "CLOSED" ? "Closed" : d.isDraft ? "Draft" : "Open"; }
+
+async function showPR(pr) {
+  const [owner, repo] = pr.repository.nameWithOwner.split("/");
+  drawerRepoEl.textContent = `${pr.repository.nameWithOwner} #${pr.number}`;
+  drawerGhEl.href = pr.url;
+  openDrawer();
+  const cached = prDetailCache.get(pr.url); // reuse until the next board reload
+  if (cached) { renderDrawer(cached); return; }
+  drawerBodyEl.innerHTML = `<div class="drawer-loading">Loading…</div>`;
+  try {
+    const data = await graphql(`query { repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(repo)}) {
+      pullRequest(number: ${pr.number}) {
+        number title url state isDraft createdAt
+        author { login avatarUrl }
+        baseRefName headRefName additions deletions changedFiles
+        labels(first: 20) { nodes { name color } }
+        bodyHTML
+        timelineItems(first: 100, itemTypes: [
+          ISSUE_COMMENT, PULL_REQUEST_REVIEW, PULL_REQUEST_COMMIT, REVIEW_REQUESTED_EVENT,
+          LABELED_EVENT, UNLABELED_EVENT, RENAMED_TITLE_EVENT, HEAD_REF_FORCE_PUSHED_EVENT,
+          READY_FOR_REVIEW_EVENT, CONVERT_TO_DRAFT_EVENT, ASSIGNED_EVENT,
+          MERGED_EVENT, CLOSED_EVENT, REOPENED_EVENT, CROSS_REFERENCED_EVENT
+        ]) {
+          totalCount
+          nodes {
+            __typename
+            ... on IssueComment { author { login avatarUrl } createdAt bodyHTML }
+            ... on PullRequestReview { author { login avatarUrl } createdAt state bodyHTML }
+            ... on PullRequestCommit { commit { abbreviatedOid messageHeadline committedDate author { user { login } name } } }
+            ... on ReviewRequestedEvent { actor { login } createdAt requestedReviewer { __typename ... on User { login } ... on Team { name } } }
+            ... on LabeledEvent { actor { login } createdAt label { name color } }
+            ... on UnlabeledEvent { actor { login } createdAt label { name color } }
+            ... on RenamedTitleEvent { actor { login } createdAt previousTitle currentTitle }
+            ... on HeadRefForcePushedEvent { actor { login } createdAt beforeCommit { abbreviatedOid } afterCommit { abbreviatedOid } }
+            ... on ReadyForReviewEvent { actor { login } createdAt }
+            ... on ConvertToDraftEvent { actor { login } createdAt }
+            ... on AssignedEvent { actor { login } createdAt assignee { __typename ... on User { login } } }
+            ... on MergedEvent { actor { login } createdAt commit { abbreviatedOid } mergeRefName }
+            ... on ClosedEvent { actor { login } createdAt }
+            ... on ReopenedEvent { actor { login } createdAt }
+            ... on CrossReferencedEvent { actor { login } createdAt source { __typename ... on PullRequest { number title url repository { nameWithOwner } } ... on Issue { number title url repository { nameWithOwner } } } }
+          }
+        }
+        reviewThreads(first: 50) {
+          nodes {
+            isResolved isOutdated path line
+            comments(first: 50) { nodes { author { login avatarUrl } createdAt bodyHTML diffHunk } }
+          }
+        }
+      }
+    } }`);
+    const d = data.repository?.pullRequest;
+    if (!d) throw new Error("not found");
+    prDetailCache.set(pr.url, d);
+    renderDrawer(d);
+  } catch (e) {
+    drawerBodyEl.innerHTML = `<div class="drawer-error">Couldn't load this PR: ${esc(e.message)}</div>`;
+  }
+}
+
+// bodyHTML / timeline HTML come pre-sanitized from GitHub's GraphQL API.
+function renderDrawer(d) {
+  const labels = (d.labels?.nodes || []).map(l =>
+    `<span class="lbl" style="background:#${l.color}22;border-color:#${l.color}88">${esc(l.name)}</span>`).join("");
+  const items = (d.timelineItems?.nodes || []).map(renderTimelineItem).join("");
+  const threads = d.reviewThreads?.nodes || [];
+  const unresolved = threads.filter(t => !t.isResolved).length;
+  const threadsHTML = threads.length
+    ? `<div class="pr-section-title">Review threads (${unresolved} unresolved / ${threads.length})</div>${threads.map(renderThread).join("")}`
+    : "";
+  drawerBodyEl.innerHTML = `
+    <h1 class="pr-title">${esc(d.title)} <span class="num">#${d.number}</span></h1>
+    <div class="pr-sub">
+      <span class="pr-state ${stateClass(d)}">${stateLabel(d)}</span>
+      <span class="author"><img class="avatar" src="${d.author?.avatarUrl || ''}" alt=""/>${esc(d.author?.login || '?')}</span>
+      <span>opened ${fmtDate(d.createdAt)}</span>
+      <span class="diff"><span class="add">+${d.additions}</span> <span class="del">−${d.deletions}</span> · ${d.changedFiles} files</span>
+    </div>
+    <div class="pr-sub pr-branches">wants to merge <code>${esc(d.headRefName)}</code> into <code>${esc(d.baseRefName)}</code></div>
+    ${labels ? `<div class="labels">${labels}</div>` : ""}
+    <div class="pr-section-title">Description</div>
+    <div class="pr-body">${d.bodyHTML || '<em style="color:var(--muted)">No description provided.</em>'}</div>
+    ${threadsHTML}
+    <div class="pr-section-title">Timeline</div>
+    <div class="timeline">${items || '<div class="drawer-loading">No activity yet.</div>'}</div>
+  `;
+  drawerBodyEl.scrollTop = 0;
+}
+
+const reviewTag = { APPROVED: ["approved", "reviewed"], CHANGES_REQUESTED: ["changes", "requested changes"], COMMENTED: ["commented", "reviewed"], DISMISSED: ["commented", "review dismissed"] };
+
+// last few lines of a diff hunk = the context around the commented line
+function lastHunkLines(hunk, n = 4) { return (hunk || "").split("\n").slice(-n).join("\n"); }
+// color each diff line by its leading marker (+ add, - del, @@ hunk, else context)
+function renderDiffHunk(hunk) {
+  return lastHunkLines(hunk).split("\n").map(line => {
+    const cls = line[0] === "+" ? "add" : line[0] === "-" ? "del" : line[0] === "@" ? "hunk" : "ctx";
+    return `<span class="dl ${cls}">${esc(line) || "&nbsp;"}</span>`;
+  }).join("");
+}
+
+// A review thread = the inline diff comments on one line (original + replies), with status.
+function renderThread(t) {
+  const loc = esc(t.path || "(file)") + (t.line ? ":" + t.line : "");
+  const cs = t.comments?.nodes || [];
+  const diff = cs[0]?.diffHunk ? `<pre class="rc-diff">${renderDiffHunk(cs[0].diffHunk)}</pre>` : "";
+  const comments = cs.map(c => `
+    <div class="tc">
+      <div class="rc-head"><img class="avatar" src="${c.author?.avatarUrl || ''}" alt=""/><span class="who">${esc(c.author?.login || '?')}</span><span class="when">${fmtDate(c.createdAt)}</span></div>
+      <div class="comment-body">${c.bodyHTML || ''}</div>
+    </div>`).join("");
+  const tags = `<span class="thread-tag ${t.isResolved ? 'resolved' : 'unresolved'}">${t.isResolved ? 'resolved' : 'unresolved'}</span>${t.isOutdated ? '<span class="thread-tag outdated">outdated</span>' : ''}`;
+  return `<details class="thread"${t.isResolved ? "" : " open"}>
+    <summary><span class="rc-loc">${loc}</span>${tags}</summary>
+    ${diff}${comments}
+  </details>`;
+}
+
+// Comments and reviews render as boxes; everything else as a compact timeline row.
+// GitHub Octicons (16px) used on the timeline, instead of emoji.
+const OCTICON = {
+  "git-commit": '<path d="M11.93 8.5a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5Zm-1.43-.75a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z"/>',
+  "comment": '<path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/>',
+  "eye": '<path d="M8 2c1.981 0 3.671.992 4.933 2.078 1.27 1.091 2.187 2.345 2.637 3.023a1.62 1.62 0 0 1 0 1.798c-.45.678-1.367 1.932-2.637 3.023C11.67 13.008 9.981 14 8 14c-1.981 0-3.671-.992-4.933-2.078C1.797 10.83.88 9.576.43 8.898a1.62 1.62 0 0 1 0-1.798c.45-.677 1.367-1.931 2.637-3.022C4.33 2.992 6.019 2 8 2ZM1.679 7.932a.12.12 0 0 0 0 .136c.411.622 1.241 1.75 2.366 2.717C5.176 11.758 6.527 12.5 8 12.5c1.473 0 2.825-.742 3.955-1.715 1.124-.967 1.954-2.096 2.366-2.717a.12.12 0 0 0 0-.136c-.412-.621-1.242-1.75-2.366-2.717C10.824 4.242 9.473 3.5 8 3.5c-1.473 0-2.825.742-3.955 1.715-1.124.967-1.954 2.096-2.366 2.717ZM8 10a2 2 0 1 1-.001-3.999A2 2 0 0 1 8 10Z"/>',
+  "tag": '<path d="M1 7.775V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 0 1 0 2.474l-5.026 5.026a1.75 1.75 0 0 1-2.474 0l-6.25-6.25A1.752 1.752 0 0 1 1 7.775Zm1.5 0c0 .066.026.13.073.177l6.25 6.25a.25.25 0 0 0 .354 0l5.025-5.025a.25.25 0 0 0 0-.354l-6.25-6.25a.25.25 0 0 0-.177-.073H2.75a.25.25 0 0 0-.25.25ZM6 5a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z"/>',
+  "pencil": '<path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"/>',
+  "git-pull-request": '<path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"/>',
+  "git-pull-request-draft": '<path d="M3.25 1A2.25 2.25 0 0 1 4 5.372v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.251 2.251 0 0 1 3.25 1Zm9.5 14a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5ZM2.5 3.25a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0ZM3.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm9.5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM14 7.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm0-4.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Z"/>',
+  "git-pull-request-closed": '<path d="M3.25 1A2.25 2.25 0 0 1 4 5.372v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.251 2.251 0 0 1 3.25 1Zm9.5 5.5a.75.75 0 0 1 .75.75v3.378a2.251 2.251 0 1 1-1.5 0V7.25a.75.75 0 0 1 .75-.75Zm-2.03-5.273a.75.75 0 0 1 1.06 0l.97.97.97-.97a.748.748 0 0 1 1.265.332.75.75 0 0 1-.205.729l-.97.97.97.97a.751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018l-.97-.97-.97.97a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l.97-.97-.97-.97a.75.75 0 0 1 0-1.06ZM2.5 3.25a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0ZM3.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm9.5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/>',
+  "git-merge": '<path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0 0 .005V3.25Z"/>',
+  "person": '<path d="M10.561 8.073a6.005 6.005 0 0 1 3.432 5.142.75.75 0 1 1-1.498.07 4.5 4.5 0 0 0-8.99 0 .75.75 0 0 1-1.498-.07 6.004 6.004 0 0 1 3.431-5.142 3.999 3.999 0 1 1 5.123 0ZM10.5 5a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z"/>',
+  "dot-fill": '<path d="M8 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/>',
+  "cross-reference": '<path d="M2.75 3.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 13H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 14.543V13H2.75A1.75 1.75 0 0 1 1 11.25v-7.5C1 2.784 1.784 2 2.75 2h5.5a.75.75 0 0 1 0 1.5ZM16 1.25v4.146a.25.25 0 0 1-.427.177L14.03 4.03l-3.75 3.75a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l3.75-3.75-1.543-1.543A.25.25 0 0 1 11.604 1h4.146a.25.25 0 0 1 .25.25Z"/>',
+};
+function oct(name) { return `<svg class="oct" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">${OCTICON[name] || ""}</svg>`; }
+
+function renderTimelineItem(n) {
+  const who = (s) => `<b>${esc((s && s.login) || "someone")}</b>`;
+  const badge = (name, color) => `<span class="tl-badge ${color}">${oct(name)}</span>`;
+  const item = (b, content) => `<div class="tl-item"><span class="tl-gutter">${b}</span><div class="tl-content">${content}</div></div>`;
+  const box = (avatar, head, bodyHTML) =>
+    `<div class="comment"><div class="comment-head"><img class="avatar" src="${avatar || ''}" alt=""/>${head}</div>${bodyHTML ? `<div class="comment-body">${bodyHTML}</div>` : ""}</div>`;
+  const ev = (name, color, html, when) =>
+    item(badge(name, color), `<div class="tl-event"><span class="tl-text">${html}</span><span class="tl-when">${when ? fmtDate(when) : ""}</span></div>`);
+
+  switch (n.__typename) {
+    case "IssueComment":
+      return item(badge("comment", "gray"), box(n.author?.avatarUrl, `${who(n.author)}<span class="when">${fmtDate(n.createdAt)}</span>`, n.bodyHTML));
+    case "PullRequestReview": {
+      const [cls, label] = reviewTag[n.state] || ["commented", "reviewed"];
+      const color = cls === "approved" ? "green" : cls === "changes" ? "red" : "gray";
+      const head = `${who(n.author)}<span class="review-tag ${cls}">${label}</span><span class="when">${fmtDate(n.createdAt)}</span>`;
+      return item(badge("eye", color), box(n.author?.avatarUrl, head, n.bodyHTML));
+    }
+    case "PullRequestCommit": {
+      const c = n.commit, author = c.author?.user?.login || c.author?.name || "";
+      return ev("git-commit", "gray", `<b>${esc(author)}</b> added commit <code>${esc(c.abbreviatedOid)}</code> ${esc(c.messageHeadline)}`, c.committedDate);
+    }
+    case "ReviewRequestedEvent":
+      return ev("eye", "gray", `${who(n.actor)} requested review from <b>${esc(n.requestedReviewer?.login || n.requestedReviewer?.name || "?")}</b>`, n.createdAt);
+    case "LabeledEvent":
+      return ev("tag", "gray", `${who(n.actor)} added <span class="lbl" style="background:#${n.label.color}22;border-color:#${n.label.color}88">${esc(n.label.name)}</span>`, n.createdAt);
+    case "UnlabeledEvent":
+      return ev("tag", "gray", `${who(n.actor)} removed <span class="lbl" style="background:#${n.label.color}22;border-color:#${n.label.color}88">${esc(n.label.name)}</span>`, n.createdAt);
+    case "RenamedTitleEvent":
+      return ev("pencil", "gray", `${who(n.actor)} changed the title to <b>${esc(n.currentTitle)}</b>`, n.createdAt);
+    case "HeadRefForcePushedEvent":
+      return ev("git-commit", "gray", `${who(n.actor)} force-pushed <code>${esc(n.beforeCommit?.abbreviatedOid || "")}</code> → <code>${esc(n.afterCommit?.abbreviatedOid || "")}</code>`, n.createdAt);
+    case "ReadyForReviewEvent":
+      return ev("git-pull-request", "green", `${who(n.actor)} marked this ready for review`, n.createdAt);
+    case "ConvertToDraftEvent":
+      return ev("git-pull-request-draft", "gray", `${who(n.actor)} converted this to draft`, n.createdAt);
+    case "AssignedEvent":
+      return ev("person", "gray", `${who(n.actor)} assigned <b>${esc(n.assignee?.login || "?")}</b>`, n.createdAt);
+    case "MergedEvent":
+      return ev("git-merge", "purple", `${who(n.actor)} merged <code>${esc(n.commit?.abbreviatedOid || "")}</code> into <code>${esc(n.mergeRefName)}</code>`, n.createdAt);
+    case "ClosedEvent":
+      return ev("git-pull-request-closed", "red", `${who(n.actor)} closed this`, n.createdAt);
+    case "ReopenedEvent":
+      return ev("dot-fill", "green", `${who(n.actor)} reopened this`, n.createdAt);
+    case "CrossReferencedEvent": {
+      const s = n.source || {};
+      return ev("cross-reference", "gray", `${who(n.actor)} referenced this in <a href="${s.url}" target="_blank" rel="noopener">${esc(s.repository?.nameWithOwner || "")}#${s.number}</a>`, n.createdAt);
+    }
+    default:
+      return "";
+  }
+}
 
 // Gate the board behind GitHub sign-in when the server is in hosted (OAuth) mode.
 async function boot() {
